@@ -36,29 +36,29 @@
       }
 
       const rsiDisplay = document.getElementById('rsiDisplay');
-      rsiDisplay.innerHTML = content + rsiDisplay.innerHTML;
+      rsiDisplay.innerHTML = content + rsiDisplay.innerHTML;  // 변경된 부분
 
       isLoading = false;
     }
 
     function displayCountdown() {
-      // 카운트 다운을 표시하고 1초씩 감소합니다.
       const countdownDisplay = document.getElementById('countdownDisplay');
       countdownDisplay.innerText = `${countdown}초`;
       countdown--;
 
-      // 카운트 다운이 0 이상인 경우에 계속 감소하도록 합니다.
       if (countdown >= 0) {
-        countdownInterval = setTimeout(displayCountdown, 1000); // 1초마다 업데이트
+        countdownInterval = setTimeout(displayCountdown, 1000);
       } else {
-        // 카운트 다운이 완료되면 새로고침
         fetchAndDisplayRSI();
-        countdown = 60; // 카운트 다운 초기화
-        countdownDisplay.innerText = `${countdown}초`; // 초기 카운트 다운 표시
+        countdown = 60;
+        countdownDisplay.innerText = `${countdown}초`;
       }
     }
 
     window.onload = function() {
+      const titleElement = document.getElementById('title');
+      titleElement.innerHTML += ' (<span id="countdownDisplay">60초</span>)';  // 변경된 부분
+
       fetchAndDisplayRSI();
       countdownInterval = setTimeout(displayCountdown, 1000);
       setInterval(() => {
@@ -70,8 +70,7 @@
   </script>
 </head>
 <body style="background-color: black;">
-  <h1 style="color: white;">Upbit KRW Coins RSI</h1>
+  <h1 id="title" style="color: white;">Upbit KRW Coins RSI</h1> <!-- 변경된 부분 -->
   <div id="rsiDisplay"></div>
-  <div id="countdownDisplay" style="color: white;">60초</div>
 </body>
 </html>
