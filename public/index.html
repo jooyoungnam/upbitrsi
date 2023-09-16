@@ -21,7 +21,7 @@
     async function fetchAndDisplayRSI() {
       isLoading = true;
 
-      const response = await fetch(`http://localhost:3000/rsi`);
+      const response = await fetch(`https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/rsi`);
       const { rsiData } = await response.json();
 
       let content = '';
