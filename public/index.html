@@ -1,76 +1,150 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>RSI Dashboard</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Upbit RSI Dashboard</title>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+    }
+
+    table, th, td {
+  text-align: center;  /* 텍스트를 가운데로 정렬 */
+  border-collapse: collapse;  /* 셀 테두리를 합침 */
+  }
+
+  table, th, td {
+    text-align: center;  /* 반응형 텍스트를 가운데로 정렬 */
+    border-collapse: collapse;  /* 셀 테두리를 합침 */
+  }
+
+  @media only screen and (max-width: 600px) {
+    table, th, td {
+      font-size: 12px;  /* 반응형 글자 크기를 12px로 줄임 */
+    }
+  }
+
+  </style>
+  
   <script>
-    let isLoading = false;
-    let countdown = 60;
-    let countdownInterval;
-    const displayedRSI = new Set();
+   let countdown = 60;
+   let rsiData = {};
 
-    function getRSIColor(rsi) {
-      if (rsi >= 70) return 'darkred';
-      if (rsi >= 60) return 'red';
-      if (rsi >= 50) return 'indianred';
-      if (rsi >= 40) return 'green';
-      if (rsi >= 30) return 'lightblue';
-      return 'blue';
-    }
+   async function fetchRSI() {
+  const response = await fetch("http://localhost:3000/rsi");
+  const data = await response.json();
+  rsiData = data.rsiData;
+  // 테이블 업데이트
+  updateTable();
+  // 선택된 정렬 옵션에 따라 데이터 정렬
+  sortData();  // 이 부분을 추가
+  countdown = 60;
+  document.getElementById("countdown").innerText = countdown;
+  updateCurrentTime();
+}
 
-    async function fetchAndDisplayRSI() {
-      isLoading = true;
+function updateTable() {
+  const tableBody = document.getElementById("rsiTableBody");
+  tableBody.innerHTML = "";
+  let rank = 1;
+  for (const market in rsiData) {
+    const rsiValue = rsiData[market].rsi;
+    const rsiColor = getRSIColor(rsiValue);
+    const row = `<tr style="color:${rsiColor}">
+      <td>${rank}</td>
+      <td>${rsiData[market].korean_name}</td>
+      <td>${market}</td>
+      <td>${rsiValue.toFixed(2)}</td>
+    </tr>`;
+    tableBody.innerHTML += row;
+    rank++;
+  }
+}
 
-      const response = await fetch(`https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/rsi`);
-      const { rsiData } = await response.json();
+function getRSIColor(rsi) {
+  if (rsi >= 70) return '#ff0800';
+  if (rsi >= 60) return 'yellow';
+  if (rsi >= 50) return '#FF8C00';
+  if (rsi >= 40) return '#32CD32';
+  if (rsi >= 30) return '#87CEEB';
+  return '#1E90FF';
+}
 
-      let content = '';
-      for (const [market, data] of Object.entries(rsiData)) {
-        const { rsi, korean_name } = data;
+function updateCountdown() {
+  countdown--;
+  document.getElementById("countdown").innerText = countdown;
+  if (countdown <= 0) {
+    fetchRSI();
+  }
+}
 
-        if (!displayedRSI.has(market)) {
-          const color = getRSIColor(rsi);
-          content += `<div style="color: ${color}">${korean_name} (${market}) - RSI: ${rsi.toFixed(2)}</div>`;
-          displayedRSI.add(market);
-        }
-      }
+function padNumber(number) {
+  return number < 10 ? `0${number}` : number;
+}
 
-      const rsiDisplay = document.getElementById('rsiDisplay');
-      rsiDisplay.innerHTML = content + rsiDisplay.innerHTML;  // 변경된 부분
+function updateCurrentTime() {
+  const now = new Date();
+  const formattedTime = `${now.getFullYear()}-${padNumber(now.getMonth() + 1)}-${padNumber(now.getDate())} ${padNumber(now.getHours())}:${padNumber(now.getMinutes())}`;
+  document.getElementById("lastUpdated").innerText = formattedTime;
+}
 
-      isLoading = false;
-    }
+function sortAscending() {
+  rsiData = Object.fromEntries(
+    Object.entries(rsiData).sort(([, a], [, b]) => a.rsi - b.rsi)
+  );
+  updateTable();
+}
 
-    function displayCountdown() {
-      const countdownDisplay = document.getElementById('countdownDisplay');
-      countdownDisplay.innerText = `${countdown}초`;
-      countdown--;
+function sortDescending() {
+  rsiData = Object.fromEntries(
+    Object.entries(rsiData).sort(([, a], [, b]) => b.rsi - a.rsi)
+  );
+  updateTable();
+}
 
-      if (countdown >= 0) {
-        countdownInterval = setTimeout(displayCountdown, 1000);
-      } else {
-        fetchAndDisplayRSI();
-        countdown = 60;
-        countdownDisplay.innerText = `${countdown}초`;
-      }
-    }
+function sortData() {
+  const sortOption = document.getElementById("sortOption").value;
+  if (sortOption === 'asc') {
+    sortAscending();
+  } else if (sortOption === 'desc') {
+    sortDescending();
+  } else {
+    updateTable(); // 원래대로 복원
+  }
+}
 
-    window.onload = function() {
-      const titleElement = document.getElementById('title');
-      titleElement.innerHTML += ' (<span id="countdownDisplay">60초</span>)';  // 변경된 부분
+window.onload = () => {
+  fetchRSI();
+  setInterval(updateCountdown, 1000);
+  setInterval(updateCurrentTime, 1000);
+  document.getElementById("sortOption").addEventListener("change", sortData); // 이 부분을 추가
+};
 
-      fetchAndDisplayRSI();
-      countdownInterval = setTimeout(displayCountdown, 1000);
-      setInterval(() => {
-        if (!isLoading) {
-          fetchAndDisplayRSI();
-        }
-      }, 60000);
-    };
-  </script>
+</script>
 </head>
-<body style="background-color: black;">
-  <h1 id="title" style="color: white;">Upbit KRW Coins RSI</h1> <!-- 변경된 부분 -->
-  <div id="rsiDisplay"></div>
+<body>
+  <p>현재 시간: <span id="lastUpdated"></span></p>
+  <p>Next update in: <span id="countdown">60</span> seconds.</p>
+  <h1>Upbit RSI Dashboard</h1>
+  <select id="sortOption">
+    <option value="asc">오름차순</option>
+    <option value="desc" selected>내림차순</option> <!-- selected 속성 추가 -->
+  </select>
+  <table border="1">
+    <thead>
+      <tr>
+        <th>Rank</th>
+        <th>Korean Name</th>
+        <th>Market</th>
+        <th>RSI</th>
+      </tr>
+    </thead>
+    <tbody id="rsiTableBody">
+      <!-- RSI 데이터가 여기에 표시됩니다. -->
+    </tbody>
+  </table>
 </body>
 </html>
