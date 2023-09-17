@@ -34,7 +34,14 @@
    let rsiData = {};
 
    async function fetchRSI() {
-  const response = await fetch("https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/");
+  let url; // 이 변수를 추가
+  
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    url = "http://localhost:3000/rsi";
+  } else {
+    url = "https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/rsi";  // 배포된 주소
+  }
+  const response = await fetch(url); // 변경된 url을 사용
   const data = await response.json();
   rsiData = data.rsiData;
   // 테이블 업데이트
