@@ -34,7 +34,7 @@
    let rsiData = {};
 
    async function fetchRSI() {
-  const response = await fetch("http://localhost:3000/rsi");
+  const response = await fetch("https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/");
   const data = await response.json();
   rsiData = data.rsiData;
   // 테이블 업데이트
