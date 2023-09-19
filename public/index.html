@@ -1,145 +1,182 @@
 <!DOCTYPE html>
 <html>
 <head>
-
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
   <title>Upbit RSI Dashboard</title>
   <style>
     body {
       background-color: black;
       color: white;
     }
-
     table, th, td {
-  text-align: center;  /* 텍스트를 가운데로 정렬 */
-  border-collapse: collapse;  /* 셀 테두리를 합침 */
-  }
-
-  table, th, td {
-    text-align: center;  /* 반응형 텍스트를 가운데로 정렬 */
-    border-collapse: collapse;  /* 셀 테두리를 합침 */
-  }
-
-  @media only screen and (max-width: 600px) {
-    table, th, td {
-      font-size: 12px;  /* 반응형 글자 크기를 12px로 줄임 */
+      text-align: center;
+      border-collapse: collapse;
     }
-  }
-
+    @media only screen and (max-width: 600px) {
+      table, th, td {
+        font-size: 12px;
+      }
+    }
   </style>
-  
+
   <script>
-   let countdown = 60;
-   let rsiData = {};
+    let countdown = 60;
+    let rsiData = {};
+    let isWaiting = false;
+    let selectedInterval = "240";
+    let loadingDots = 0;
+    let loadingInterval;
 
-   async function fetchRSI() {
-  let url; // 이 변수를 추가
-  
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    url = "http://localhost:3000/rsi";
-  } else {
-    url = "https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/rsi";  // 배포된 주소
-  }
-  const response = await fetch(url); // 변경된 url을 사용
-  const data = await response.json();
-  rsiData = data.rsiData;
-  // 테이블 업데이트
-  updateTable();
-  // 선택된 정렬 옵션에 따라 데이터 정렬
-  sortData();  // 이 부분을 추가
-  countdown = 60;
-  document.getElementById("countdown").innerText = countdown;
-  updateCurrentTime();
+    function startLoadingMessage() {
+  const waitingMessageElement = document.getElementById("waitingMessage");
+  waitingMessageElement.style.color = 'red';  // 글자색을 빨간색으로 변경
+  waitingMessageElement.innerText = `현재 ${selectedInterval} 기준으로 RSI를 갱신 중입니다. 잠시만 기다려주세요`;
+  loadingInterval = setInterval(() => {
+    loadingDots = (loadingDots + 1) % 4;
+    const dots = ".".repeat(loadingDots);
+    waitingMessageElement.innerText = `현재 ${selectedInterval} 기준으로 RSI를 갱신 중입니다. 잠시만 기다려주세요${dots}`;
+  }, 500); // 0.5초마다 실행
 }
 
-function updateTable() {
-  const tableBody = document.getElementById("rsiTableBody");
-  tableBody.innerHTML = "";
-  let rank = 1;
-  for (const market in rsiData) {
-    const rsiValue = rsiData[market].rsi;
-    const rsiColor = getRSIColor(rsiValue);
-    const row = `<tr style="color:${rsiColor}">
-      <td>${rank}</td>
-      <td>${rsiData[market].korean_name}</td>
-      <td>${market}</td>
-      <td>${rsiValue.toFixed(2)}</td>
-    </tr>`;
-    tableBody.innerHTML += row;
-    rank++;
-  }
-}
 
-function getRSIColor(rsi) {
-  if (rsi >= 70) return '#ff0800';
-  if (rsi >= 60) return 'yellow';
-  if (rsi >= 50) return '#FF8C00';
-  if (rsi >= 40) return '#32CD32';
-  if (rsi >= 30) return '#87CEEB';
-  return '#1E90FF';
-}
+    function stopLoadingMessage() {
+      clearInterval(loadingInterval);
+      document.getElementById("waitingMessage").innerText = '';
+    }
 
-function updateCountdown() {
-  countdown--;
-  document.getElementById("countdown").innerText = countdown;
-  if (countdown <= 0) {
-    fetchRSI();
-  }
-}
+    async function fetchRSI() {
+      isWaiting = true;
+      countdown = 60;
+      document.getElementById("countdown").innerText = countdown;
 
-function padNumber(number) {
-  return number < 10 ? `0${number}` : number;
-}
+      startLoadingMessage();
 
-function updateCurrentTime() {
-  const now = new Date();
-  const formattedTime = `${now.getFullYear()}-${padNumber(now.getMonth() + 1)}-${padNumber(now.getDate())} ${padNumber(now.getHours())}:${padNumber(now.getMinutes())}`;
-  document.getElementById("lastUpdated").innerText = formattedTime;
-}
+      const interval = selectedInterval;
+      let url;
+      if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        url = `http://localhost:3000/rsi?interval=${interval}`;
+      } else {
+        url = `https://port-0-upbitrsi-2rrqq2blmm4tos2.sel5.cloudtype.app/rsi?interval=${interval}`;
+      }
+      
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        rsiData = data.rsiData;
+        updateTable();
+        sortData();
+        updateCurrentTime();
+      } catch (e) {
+        document.getElementById("waitingMessage").innerText = "데이터를 불러오는 데 실패했습니다.";
+      }
 
-function sortAscending() {
-  rsiData = Object.fromEntries(
-    Object.entries(rsiData).sort(([, a], [, b]) => a.rsi - b.rsi)
-  );
-  updateTable();
-}
+      stopLoadingMessage();
+      isWaiting = false;
+      document.getElementById("waitingMessage").innerText = '';
+    }
 
-function sortDescending() {
-  rsiData = Object.fromEntries(
-    Object.entries(rsiData).sort(([, a], [, b]) => b.rsi - a.rsi)
-  );
-  updateTable();
-}
+   function updateCountdown() {
+      if (!isWaiting) {
+        countdown--;
+        document.getElementById("countdown").innerText = countdown;
+        if (countdown <= 0) {
+          fetchRSI();
+        }
+      }
+    }
 
-function sortData() {
-  const sortOption = document.getElementById("sortOption").value;
-  if (sortOption === 'asc') {
-    sortAscending();
-  } else if (sortOption === 'desc') {
-    sortDescending();
-  } else {
-    updateTable(); // 원래대로 복원
-  }
-}
+    function updateTable() {
+      const tableBody = document.getElementById("rsiTableBody");
+      tableBody.innerHTML = "";
+      let rank = 1;
+      for (const market in rsiData) {
+        const rsiValue = rsiData[market].rsi;
+        const rsiColor = getRSIColor(rsiValue);
+        const row = `<tr style="color:${rsiColor}">
+          <td>${rank}</td>
+          <td>${rsiData[market].korean_name}</td>
+          <td>${market}</td>
+          <td>${rsiValue.toFixed(2)}</td>
+        </tr>`;
+        tableBody.innerHTML += row;
+        rank++;
+      }
+    }
 
-window.onload = () => {
-  fetchRSI();
-  setInterval(updateCountdown, 1000);
-  setInterval(updateCurrentTime, 1000);
-  document.getElementById("sortOption").addEventListener("change", sortData); // 이 부분을 추가
-};
+    function getRSIColor(rsi) {
+      if (rsi >= 70) return '#ff0800';
+      if (rsi >= 60) return 'yellow';
+      if (rsi >= 50) return '#FF8C00';
+      if (rsi >= 40) return '#32CD32';
+      if (rsi >= 30) return '#87CEEB';
+      return '#1E90FF';
+    }
 
-</script>
+    function updateCurrentTime() {
+      const now = new Date();
+      const formattedTime = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()} ${now.getHours()}:${now.getMinutes()}`;
+      document.getElementById("lastUpdated").innerText = formattedTime;
+    }
+
+    function sortData() {
+      const sortOption = document.getElementById("sortOption").value;
+      if (sortOption === 'asc') {
+        rsiData = Object.fromEntries(
+          Object.entries(rsiData).sort(([, a], [, b]) => a.rsi - b.rsi)
+        );
+      } else if (sortOption === 'desc') {
+        rsiData = Object.fromEntries(
+          Object.entries(rsiData).sort(([, a], [, b]) => b.rsi - a.rsi)
+        );
+      }
+      updateTable();
+    }
+
+    window.onload = () => {
+      fetchRSI().then(() => sortData());
+      setInterval(updateCountdown, 1000);
+
+      document.getElementById("intervalSelect").addEventListener("change", (event) => {
+  const newInterval = event.target.value;
+  selectedInterval = newInterval;  // 이 부분은 항상 실행됩니다.
+  fetchRSI().then(() => sortData());  // 이 부분도 항상 실행됩니다.
+});
+
+
+
+      document.getElementById("sortOption").addEventListener("change", () => {
+        sortData();
+      });
+    };
+  </script>
 </head>
 <body>
+  <p id="waitingMessage"></p>
   <p>현재 시간: <span id="lastUpdated"></span></p>
   <p>Next update in: <span id="countdown">60</span> seconds.</p>
   <h1>Upbit RSI Dashboard</h1>
+
+  <label for="sortOption">정렬:</label>
   <select id="sortOption">
     <option value="asc">오름차순</option>
-    <option value="desc" selected>내림차순</option> <!-- selected 속성 추가 -->
+    <option value="desc" selected>내림차순</option>
   </select>
+
+  <label for="intervalSelect">시간:</label>
+  <select id="intervalSelect">
+    <option value="1">1분</option>
+    <option value="3">3분</option>
+    <option value="5">5분</option>
+    <option value="10">10분</option>
+    <option value="15">15분</option>
+    <option value="30">30분</option>
+    <option value="60">60분</option>
+    <option value="240" selected>240분</option>
+    <option value="day">일</option>
+    <option value="week">주</option>
+    <option value="month">월</option>
+  </select>
+
   <table border="1">
     <thead>
       <tr>
