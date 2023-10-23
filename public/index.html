@@ -86,22 +86,39 @@
     }
 
     function updateTable() {
-      const tableBody = document.getElementById("rsiTableBody");
-      tableBody.innerHTML = "";
-      let rank = 1;
-      for (const market in rsiData) {
-        const rsiValue = rsiData[market].rsi;
-        const rsiColor = getRSIColor(rsiValue);
-        const row = `<tr style="color:${rsiColor}">
-          <td>${rank}</td>
-          <td>${rsiData[market].korean_name}</td>
-          <td>${market}</td>
-          <td>${rsiValue.toFixed(2)}</td>
-        </tr>`;
-        tableBody.innerHTML += row;
-        rank++;
-      }
+  const tableBody = document.getElementById("rsiTableBody");
+  tableBody.innerHTML = "";
+  let rank = 1;
+  for (const market in rsiData) {
+    const rsiValue = rsiData[market].rsi;
+    const rsiColor = getRSIColor(rsiValue);
+    const currentPrice = rsiData[market].currentPrice;
+    const sevenDayPrices = rsiData[market].sevenDayPrices || [];
+    const predictedPrice = rsiData[market].predictedPrice || 0;
+    const arimaPredictedPrice = rsiData[market].arimaPredictedPrice || "0 KRW";  // ARIMA 예측값
+
+    const arimaPredictedPriceWithoutKRW = arimaPredictedPrice.replace(' KRW', '');  // ' KRW' 제거
+    
+    let priceRows = '';
+    for (let i = 0; i < sevenDayPrices.length; i++) {
+      priceRows += `<td>${sevenDayPrices[i].toLocaleString()}</td>`;  // ' KRW'를 제거
     }
+
+    const row = `<tr style="color:${rsiColor}">
+      <td>${rank}</td>
+      <td>${rsiData[market].korean_name}</td>
+      <td>${market}</td>
+      <td>${rsiValue.toFixed(2)}</td>
+      <td>${predictedPrice.toLocaleString()}</td> <!-- ' KRW'를 제거 -->
+      <td>${arimaPredictedPriceWithoutKRW}</td> <!-- ' KRW'를 제거 -->
+      <td>${currentPrice.toLocaleString()}</td> <!-- ' KRW'를 제거 -->
+      ${priceRows}
+    </tr>`;
+    tableBody.innerHTML += row;
+    rank++;
+  }
+}
+
 
     function getRSIColor(rsi) {
       if (rsi >= 70) return '#ff0800';
@@ -158,8 +175,8 @@
 
   <label for="sortOption">정렬:</label>
   <select id="sortOption">
-    <option value="asc">오름차순</option>
-    <option value="desc" selected>내림차순</option>
+    <option value="asc">RSI오름차순</option>
+    <option value="desc" selected>RSI내림차순</option>
   </select>
 
   <label for="intervalSelect">시간:</label>
@@ -184,6 +201,16 @@
         <th>Korean Name</th>
         <th>Market</th>
         <th>RSI</th>
+        <th>내일예측가(선형회귀)</th>
+        <th>내일예측가(ARIMA)</th>
+        <th>현재가</th>
+        <th>1일전</th> <!-- 추가 -->
+        <th>2일전</th> <!-- 추가 -->
+        <th>3일전</th> <!-- 추가 -->
+        <th>4일전</th> <!-- 추가 -->
+        <th>5일전</th> <!-- 추가 -->
+        <th>6일전</th> <!-- 추가 -->
+        <th>7일전</th> <!-- 추가 -->
       </tr>
     </thead>
     <tbody id="rsiTableBody">
