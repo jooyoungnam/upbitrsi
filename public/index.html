@@ -17,8 +17,17 @@
         font-size: 12px;
       }
     }
+
+    thead th {
+  position: sticky;
+  top: 0;
+  background-color: black;
+}
   </style>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.9/xlsx.full.min.js"></script>
+  <button onclick="exportToExcel()">엑셀로 저장하기</button>
+  
   <script>
     let countdown = 60;
     let rsiData = {};
@@ -37,6 +46,29 @@
     waitingMessageElement.innerText = `현재 ${selectedInterval} 기준으로 RSI를 갱신 중입니다. 잠시만 기다려주세요${dots}`;
   }, 500); // 0.5초마다 실행
 }
+
+
+    function exportToExcel() {
+        const table = document.getElementById("rsiTableBody").parentNode; 
+        const ws = XLSX.utils.table_to_sheet(table);
+        const wb = XLSX.utils.book_new();
+        
+        // 워크시트를 워크북에 추가
+        XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+        
+        const currentDate = new Date();
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0'); // 1월은 0을 반환하므로 1을 더합니다.
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const hours = String(currentDate.getHours()).padStart(2, '0');
+        const minutes = String(currentDate.getMinutes()).padStart(2, '0');
+        
+        const formattedDate = `${year}-${month}-${day}-${hours}${minutes}`;
+        const fileName = `${formattedDate}.xlsx`;
+
+        XLSX.writeFile(wb, fileName);
+    }
+
 
 
     function stopLoadingMessage() {
@@ -85,39 +117,62 @@
       }
     }
 
-    function updateTable() {
-  const tableBody = document.getElementById("rsiTableBody");
-  tableBody.innerHTML = "";
-  let rank = 1;
-  for (const market in rsiData) {
-    const rsiValue = rsiData[market].rsi;
-    const rsiColor = getRSIColor(rsiValue);
-    const currentPrice = rsiData[market].currentPrice;
-    const sevenDayPrices = rsiData[market].sevenDayPrices || [];
-    const predictedPrice = rsiData[market].predictedPrice || 0;
-    const arimaPredictedPrice = rsiData[market].arimaPredictedPrice || "0 KRW";  // ARIMA 예측값
+function updateTable() {
+    const tableBody = document.getElementById("rsiTableBody");
+    tableBody.innerHTML = "";  // 테이블 내용 초기화
+    let rank = 1;
 
-    const arimaPredictedPriceWithoutKRW = arimaPredictedPrice.replace(' KRW', '');  // ' KRW' 제거
-    
-    let priceRows = '';
-    for (let i = 0; i < sevenDayPrices.length; i++) {
-      priceRows += `<td>${sevenDayPrices[i].toLocaleString()}</td>`;  // ' KRW'를 제거
+    for (const market in rsiData) {
+        const rsiValue = rsiData[market].rsi;
+        const rsiColor = getRSIColor(rsiValue);
+
+        // 현재가 처리
+        const currentPriceValue = Number(String(rsiData[market].currentPrice).replace(' KRW', '').replace(/,/g, ''));
+        const decimalPlaces = (currentPriceValue % 1) ? currentPriceValue.toString().split('.')[1].length : 0; 
+        const currentPrice = decimalPlaces === 0 ? currentPriceValue.toLocaleString() : currentPriceValue.toFixed(decimalPlaces);
+
+        // 예측가 처리
+        let scikitPredictedPriceValue = parseFloat(String(rsiData[market].scikitPredictedPrice).replace(' KRW', '').replace(/,/g, ''));
+        let formattedScikitPredictedPrice = decimalPlaces === 0 ? scikitPredictedPriceValue.toLocaleString() : scikitPredictedPriceValue.toFixed(decimalPlaces);
+
+        // 현재가와 예측가 비교
+        let arrow;
+        if (scikitPredictedPriceValue > currentPriceValue) {
+            arrow = `<span style="color:red;">⬆️</span>`;
+        } else if (scikitPredictedPriceValue < currentPriceValue) {
+            arrow = `<span style="color:blue;">🔻</span>`;
+        } else {
+            arrow = '';
+        }
+
+        const priceDifferenceValue = scikitPredictedPriceValue - currentPriceValue;
+        const formattedPriceDifference = decimalPlaces === 0 ? priceDifferenceValue.toLocaleString() : priceDifferenceValue.toFixed(decimalPlaces);
+
+        // 일주일 가격 데이터 처리
+        const sevenDayPrices = rsiData[market].sevenDayPrices || [];
+        let priceRows = '';
+        for (let i = 0; i < sevenDayPrices.length; i++) {
+            priceRows += `<td>${Number(String(sevenDayPrices[i]).replace(/,/g, '')).toLocaleString()}</td>`;
+        }
+
+        const row = `<tr style="color:${rsiColor}">
+          <td>${rank}</td>
+          <td>${rsiData[market].korean_name}</td>
+          <td>${market}</td>
+          <td>${rsiValue.toFixed(2)}</td>
+          <td>${arrow}</td>
+          <td>${formattedPriceDifference}</td>
+          <td>${formattedScikitPredictedPrice}</td>
+          <td>${currentPrice}</td>
+          ${priceRows}
+        </tr>`;
+        tableBody.innerHTML += row;
+        rank++;
     }
-
-    const row = `<tr style="color:${rsiColor}">
-      <td>${rank}</td>
-      <td>${rsiData[market].korean_name}</td>
-      <td>${market}</td>
-      <td>${rsiValue.toFixed(2)}</td>
-      <td>${predictedPrice.toLocaleString()}</td> <!-- ' KRW'를 제거 -->
-      <td>${arimaPredictedPriceWithoutKRW}</td> <!-- ' KRW'를 제거 -->
-      <td>${currentPrice.toLocaleString()}</td> <!-- ' KRW'를 제거 -->
-      ${priceRows}
-    </tr>`;
-    tableBody.innerHTML += row;
-    rank++;
-  }
 }
+
+
+
 
 
     function getRSIColor(rsi) {
@@ -201,8 +256,9 @@
         <th>Korean Name</th>
         <th>Market</th>
         <th>RSI</th>
-        <th>내일예측가(선형회귀)</th>
-        <th>내일예측가(ARIMA)</th>
+        <th>업다운</th>
+        <th>차액</th>
+        <th>내일예측가(Scikit)</th>
         <th>현재가</th>
         <th>1일전</th> <!-- 추가 -->
         <th>2일전</th> <!-- 추가 -->
