@@ -18,6 +18,24 @@ app.get('/', (req, res) => {
   res.send('Upbit RSI API server.');
 });
 
+
+const { spawn } = require('child_process');
+
+function callPythonScript(data) {
+  return new Promise((resolve, reject) => {
+      const pythonProcess = spawn('python', ['C:\\web\\upbit\\scikit_learn.py', ...data]);
+
+      pythonProcess.stdout.on('data', (data) => {
+          resolve(parseFloat(data));
+      });
+
+      pythonProcess.stderr.on('data', (data) => {
+          reject(data.toString());
+      });
+  });
+}
+
+
 async function loadMarkets() {
   const response = await axios.get('https://api.upbit.com/v1/market/all');
   krwMarkets = response.data
@@ -39,7 +57,7 @@ async function getSevenDayPrices(market) {
 }
 
 async function getSixtyDayPrices(market) {
-  const url = `https://api.upbit.com/v1/candles/days?market=${market}&count=60`;
+  const url = `https://api.upbit.com/v1/candles/days?market=${market}&count=90`;
   const response = await axios.get(url);
   console.log(response.data.length);  // 응답 데이터의 길이 출력
   console.log(response.data);  // 응답 데이터의 내용 출력
@@ -47,35 +65,31 @@ async function getSixtyDayPrices(market) {
   return data.map(day => day.prev_closing_price);
 }
 
-getSixtyDayPrices('KRW-BTC');
+getSixtyDayPrices('KRW-BTC').then(prices => {
+  console.log(prices);
+}).catch(error => {
+  console.error(error);
+});
 
 
+async function getScikitPredictedPrice(sixtyDayPrices, currentPrice) {
+  try {
+    const predictedPrice = await callPythonScript([...sixtyDayPrices, currentPrice]);
+    return predictedPrice;
+  } catch (error) {
+    console.error('Error getting scikit predicted price:', error);
+    throw error;  // 오류를 던져서 상위 코드에서 처리할 수 있게 합니다.
+  }
+}
 
 async function getThirtyDayPrices(market) {
-  const url = `https://api.upbit.com/v1/candles/days?market=${market}&count=60`;  // 수정된 부분
+  const url = `https://api.upbit.com/v1/candles/days?market=${market}&count=90`;  // 수정된 부분
   const response = await axios.get(url);
   const data = response.data;
   const thirtyDayPrices = data.map(day => day.prev_closing_price);
   console.log(thirtyDayPrices);
   return thirtyDayPrices;
 }
-
-function predictPrice(prices) {
-  const days = prices.length;
-  const sumX = (days * (days + 1)) / 2;
-  const sumY = prices.reduce((a, b) => a + b, 0);
-  const sumXY = prices.reduce((sum, price, index) => sum + price * (index + 1), 0);
-  const sumXX = Array.from({ length: days }, (_, index) => (index + 1) ** 2).reduce((a, b) => a + b, 0);
-
-  const slope = (days * sumXY - sumX * sumY) / (days * sumXX - sumX ** 2);
-  const intercept = (sumY - slope * sumX) / days;
-
-  let predictedPrice = slope * (days + 1) + intercept;  // 내일의 가격 예측
-  predictedPrice = Math.round(predictedPrice);  // 예측된 가격을 반올림
-  console.log({ slope, intercept, predictedPrice });
-  return predictedPrice;
-}
-
 
 async function getRSI(market, interval = 240) {
  let url;
@@ -88,7 +102,7 @@ async function getRSI(market, interval = 240) {
   } else {
     url = `https://api.upbit.com/v1/candles/minutes/${interval}?market=${market}&count=200`;
   }
-  
+
   // 단일 response를 사용하여 데이터를 가져옵니다.
   const response = await axios.get(url);
   const data = response.data.reverse();
@@ -134,29 +148,6 @@ async function getRSI(market, interval = 240) {
   return rsi;
 }
 
-const ARIMA = require('arima');
-
-async function getArimaPredictedPrice(prices) {
-  console.log('Prices:', prices);  // Prices 로깅
-  
-  // arima 초기화 및 훈련 시작
-  const arima = new ARIMA({
-      p: 5,  // ARIMA(p,d,q)의 p 값
-      d: 2,  // ARIMA(p,d,q)의 d 값
-      q: 1,  // ARIMA(p,d,q)의 q 값
-      verbose: false  // 로깅 레벨 설정
-  }).train(prices);  // prices는 시계열 데이터입니다.
-
-  // 다음 1개 값 예측
-  const [pred, errors] = arima.predict(1);  // 여기서는 1단계 미래 값을 예측합니다.
-  const predictedPrice = Math.round(pred[0]);  // 예측된 가격을 반올림합니다.
-  const formattedPrice = predictedPrice.toLocaleString('ko-KR');  // 한국 돈 표시처럼 ,를 넣습니다.
-  console.log('ARIMA Predicted Price:', formattedPrice + ' KRW');  // ARIMA Predicted Price 로깅
-  return formattedPrice + ' KRW';  // 반올림된 가격과 'KRW' 단위를 함께 반환합니다.
-}
-
-
-
 async function updateData() {
   if (isUpdating) return;
   isUpdating = true;
@@ -168,21 +159,19 @@ async function updateData() {
           const sevenDayPrices = await getSevenDayPrices(market.market);
           const thirtyDayPrices = await getThirtyDayPrices(market.market);
           const sixtyDayPrices = await getSixtyDayPrices(market.market);
-          const predictedPrice = predictPrice(sixtyDayPrices);  // 수정된 부분
-          const arimaPredictedPrice = await getArimaPredictedPrice(sixtyDayPrices);  // 수정된 부분
-          console.log('ARIMA Predicted Price:', arimaPredictedPrice);  // ARIMA Predicted Price 로깅
+          const scikitPredictedPrice = await getScikitPredictedPrice(sixtyDayPrices, currentPrice);
+          console.log('Scikit-learn Predicted Price:', scikitPredictedPrice);
 
           cachedData[market.market] = {
               rsi,
               korean_name: market.korean_name,
               currentPrice,
               sevenDayPrices,
-              predictedPrice,
-              arimaPredictedPrice  // Add the ARIMA predicted price
+              scikitPredictedPrice  
           };
 
       } catch (error) {
-          console.error(`Failed to update data for ${market.market}`, error);
+        console.error(`Failed to update data for ${market.market}: ${error.message}`, error);
       }
       await new Promise(resolve => setTimeout(resolve, 200));
   }
@@ -192,11 +181,6 @@ async function updateData() {
 
   cachedData = Object.fromEntries(
       Object.entries(cachedData).sort(([,a], [,b]) => b.rsi - a.rsi)
-  );
-
-  // RSI 값에 따라 내림차순 정렬
-  cachedData = Object.fromEntries(
-    Object.entries(cachedData).sort(([,a], [,b]) => b.rsi - a.rsi)
   );
 }
 
