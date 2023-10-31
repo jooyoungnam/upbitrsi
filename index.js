@@ -23,7 +23,7 @@ const { spawn } = require('child_process');
 
 function callPythonScript(data) {
   return new Promise((resolve, reject) => {
-      const pythonProcess = spawn('python', ['C:\\web\\upbit\\scikit_learn.py', ...data]);
+     const pythonProcess = spawn('python', ['./scikit_learn.py', ...data]);
 
       pythonProcess.stdout.on('data', (data) => {
           resolve(parseFloat(data));
